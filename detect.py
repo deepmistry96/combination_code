@@ -84,6 +84,8 @@ def run(
         dnn=False,  # use OpenCV DNN for ONNX inference
         vid_stride=1,  # video frame-rate stride
 ):
+    action_on_FC=True,
+
     source = str(source)
     save_img = not nosave and not source.endswith('.txt')  # save inference images
     is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
@@ -92,8 +94,8 @@ def run(
     screenshot = source.lower().startswith('screen')
     if is_url and is_file:
         source = check_file(source)  # download
-    import pdb
-    pdb.set_trace()
+
+################################ PREPROCESSING + SETUP HERE ################################
 
     # Directories
     save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)  # increment run
@@ -116,6 +118,9 @@ def run(
     else:
         dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
     vid_path, vid_writer = [None] * bs, [None] * bs
+
+
+################################ STARTING MODEL HERE ################################
 
     # Run inference
     model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz))  # warmup
@@ -141,17 +146,8 @@ def run(
         # Second-stage classifier (optional)
         # pred = utils.general.apply_classifier(pred, classifier_model, im, im0s)
 
-        # Define the path for the CSV file
-        csv_path = save_dir / 'predictions.csv'
-
-        # Create or append to the CSV file
-        def write_to_csv(image_name, prediction, confidence):
-            data = {'Image Name': image_name, 'Prediction': prediction, 'Confidence': confidence}
-            with open(csv_path, mode='a', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=data.keys())
-                if not csv_path.is_file():
-                    writer.writeheader()
-                writer.writerow(data)
+################################ DONE WITH PREDS + POSTPROCESSING HERE ################################
+        
 
         # Process predictions
         for i, det in enumerate(pred):  # per image
@@ -185,7 +181,30 @@ def run(
                     confidence = float(conf)
                     confidence_str = f'{confidence:.2f}'
 
+                    if action_on_FC:
+                        import pdb
+                        pdb.set_trace()
+                        # if( confidence of cup > .5):
+                            # read the altitude from the FC
+                            
+                        import testing_code
+                        from testing_code import connect_and_read_alt_from_FC as read_alt
+                        read_alt()
+
                     if save_csv:
+                        # Define the path for the CSV file
+                        csv_path = save_dir / 'predictions.csv'
+
+                        # Create or append to the CSV file
+                        def write_to_csv(image_name, prediction, confidence):
+                            data = {'Image Name': image_name, 'Prediction': prediction, 'Confidence': confidence}
+                            with open(csv_path, mode='a', newline='') as f:
+                                writer = csv.DictWriter(f, fieldnames=data.keys())
+                                if not csv_path.is_file():
+                                    writer.writeheader()
+                                writer.writerow(data)
+
+
                         write_to_csv(p.name, label, confidence_str)
 
                     if save_txt:  # Write to file
