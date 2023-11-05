@@ -11,16 +11,16 @@ from yamspy import MSPy
 
 
 # #YOLO imports
-# import argparse
-# import math
-# import os
-# import random
-# import subprocess
-# import sys
-# import time
-# from copy import deepcopy
-# from datetime import datetime
-# from pathlib import Path
+import argparse
+import math
+import os
+import random
+import subprocess
+import sys
+import time
+from copy import deepcopy
+from datetime import datetime
+from pathlib import Path
 
 # try:
 #     import comet_ml  # must be imported before torch (if installed)
@@ -66,23 +66,12 @@ from yamspy import MSPy
 
 
 
-
-
 #VARS
-
-
-
-
 # #YOLO
 # LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
 # RANK = int(os.getenv('RANK', -1))
 # WORLD_SIZE = int(os.getenv('WORLD_SIZE', 1))
 # GIT_INFO = check_git_info()
-
-
-
-
-
 
 #YAMS
 import subprocess
@@ -95,11 +84,15 @@ import sys
 import os 
 comports = os.system('python -m serial.tools.list_ports') 
 print(comports)
+SERIAL_PORT = "/dev/cu.usbmodem3874346A32321"
+port_input = input("\n\nUsing " + SERIAL_PORT + "\nPaste the comport that you want to use. Enter nothing to use the provided\n")
 
+if (port_input != ""):
+    SERIAL_PORT = port_input
 
+print("Using the following comport:" + SERIAL_PORT)
 
 # SERIAL_PORT = "/dev/serial0"
-SERIAL_PORT = "/dev/ACM0"
 
 #YAMSPY gui vars
 # Max periods for:
@@ -108,6 +101,11 @@ SLOW_MSGS_LOOP_TIME = 1/5 # these messages take a lot of time slowing down the l
 NO_OF_CYCLES_AVERAGE_GUI_TIME = 10
 
 
+FILE = Path(__file__).resolve()
+ROOT = FILE.parents[0]  # YOLOv5 root directory
+if str(ROOT) not in sys.path:
+    sys.path.append(str(ROOT))  # add ROOT to PATH
+ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 
 #Function defs
@@ -143,7 +141,6 @@ def run_curses(external_function):
         curses.endwin()
         if result==1:
             print("An error occurred... probably the serial port is not available ;)")
-
 
 def keyboard_controller(screen):
 
@@ -371,7 +368,7 @@ def keyboard_controller(screen):
 
 def read_alt_from_FC():
     from yamspy import MSPy
-    serial_port = "/dev/ttyACM0"
+    serial_port = SERIAL_PORT
 
     with MSPy(device=serial_port, loglevel='DEBUG', baudrate=115200) as board:
         if board.send_RAW_msg(MSPy.MSPCodes['MSP_ALTITUDE'], data=[]):
@@ -379,10 +376,9 @@ def read_alt_from_FC():
             board.process_recv_data(dataHandler)
             print(board.SENSOR_DATA['altitude'])
 
-
 def send_cmd_to_FC(CMD):
     from yamspy import MSPy
-    serial_port = "/dev/ttyACM0"
+    serial_port = SERIAL_PORT
 
     with MSPy(device=serial_port, loglevel='DEBUG', baudrate=115200) as board:
         if board.send_RAW_msg(MSPy.MSPCodes[CMD], data=[]):
@@ -391,7 +387,69 @@ def send_cmd_to_FC(CMD):
             # print(board.SENSOR_DATA['altitude'])
 
 
+#YOLO functions
+def parse_opt():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'yolov5s.pt', help='model path or triton URL')
+    parser.add_argument('--source', type=str, default=ROOT / 'data/images', help='file/dir/URL/glob/screen/0(webcam)')
+    parser.add_argument('--data', type=str, default=ROOT / 'data/coco128.yaml', help='(optional) dataset.yaml path')
+    parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[640], help='inference size h,w')
+    parser.add_argument('--conf-thres', type=float, default=0.25, help='confidence threshold')
+    parser.add_argument('--iou-thres', type=float, default=0.45, help='NMS IoU threshold')
+    parser.add_argument('--max-det', type=int, default=1000, help='maximum detections per image')
+    parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--view-img', action='store_true', help='show results')
+    parser.add_argument('--save-txt', action='store_true', help='save results to *.txt')
+    parser.add_argument('--save-csv', action='store_true', help='save results in CSV format')
+    parser.add_argument('--save-conf', action='store_true', help='save confidences in --save-txt labels')
+    parser.add_argument('--save-crop', action='store_true', help='save cropped prediction boxes')
+    parser.add_argument('--nosave', action='store_true', help='do not save images/videos')
+    parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --classes 0, or --classes 0 2 3')
+    parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
+    parser.add_argument('--augment', action='store_true', help='augmented inference')
+    parser.add_argument('--visualize', action='store_true', help='visualize features')
+    parser.add_argument('--update', action='store_true', help='update all models')
+    parser.add_argument('--project', default=ROOT / 'runs/detect', help='save results to project/name')
+    parser.add_argument('--name', default='exp', help='save results to project/name')
+    parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
+    parser.add_argument('--line-thickness', default=3, type=int, help='bounding box thickness (pixels)')
+    parser.add_argument('--hide-labels', default=False, action='store_true', help='hide labels')
+    parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
+    parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference')
+    parser.add_argument('--dnn', action='store_true', help='use OpenCV DNN for ONNX inference')
+    parser.add_argument('--vid-stride', type=int, default=1, help='video frame-rate stride')
+    opt = parser.parse_args()
+    opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
+    # print_args(vars(opt))
+    return opt
 
+def set_root():
+    FILE = Path(__file__).resolve()
+    ROOT = FILE.parents[0]  # YOLOv5 root directory
+    if str(ROOT) not in sys.path:
+        sys.path.append(str(ROOT))  # add ROOT to PATH
+    ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
+
+def main(opt):
+    # check_requirements(ROOT / 'requirements.txt', exclude=('tensorboard', 'thop'))
+    run(**vars(opt))
+
+# This is commented because we want to run this more like a script rather than a program
+if __name__ == '__main__':
+    # set_root()
+    opt = parse_opt()
+    print(opt)
+    # main(opt)
+
+
+
+#Testing simpleUI 
 # run_curses(keyboard_controller)
 
-read_alt_from_FC()
+#Testing that we can hit the FC
+# read_alt_from_FC()
+
+#Testing yolo model
+# opt = parse_opt()
+# main(opt)
+
